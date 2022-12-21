@@ -126,8 +126,9 @@ scatter_all = ggscatterstats(
   ylab   = "Predicted Age",
   xlab   = "Age",
 )
+# can be uncommented to check the scatter plot
+#scatter_all
 
-ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/scatter_all.pdf", scatter_all, width = 10, height = 8)
 # grouped scatter plots
 subject_scatter = grouped_ggscatterstats(
   data             = data,
@@ -141,7 +142,7 @@ subject_scatter = grouped_ggscatterstats(
   #plotgrid.args    = list(nrow = 1),
   #annotation.args  = list(title = "Relationship between movie length and IMDB ratings")
 )
-ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/subject_scatter.pdf", subject_scatter, width = 19, height = 8)
+ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/Figure1.pdf", subject_scatter, width = 19, height = 8)
 
 ########################################
 ####### QC METRICS, AGE, AND BRAIN AGE ########
@@ -509,7 +510,7 @@ pvals %>% filter(sub3 < 0.05)
 out %>% select(all,sub2,predictors)
 
 
-#################### PLOT SIG PRED CORRELATIONS ####
+#################### PLOT SIG PRED CORRELATIONS: brain age & QC metrics ####
 
 # ACROSS SUBJECTS
 
@@ -549,8 +550,51 @@ p4 = ggplot(QC_BAG, aes(x=pred_age, y=efc, group = ID))+
 p_within = ggarrange(p4,p5, ncol = 1, labels = c("d","e"), common.legend = T, legend = "bottom")
 
 bivariate = ggarrange(p_between,p_within, ncol = 2)
-ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/Figure2.pdf", bivariate, width = 12, height = 8)
+ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/Supplement1.pdf", bivariate, width = 12, height = 8)
 
+
+#################### PLOT SIG PRED CORRELATIONS: BAG & QC metrics ####
+
+# ACROSS SUBJECTS
+
+# WM2MAX across subjects
+p3 = ggplot(QC_BAG, aes(x=BAG, y=wm2max))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = -10, label.y = .5, size = 3)+
+  ylab("WM2MAX") + xlab("Brain Age Gap")+ theme_bw()
+# FWHM across subjects
+p2 = ggplot(QC_BAG, aes(x=BAG, y=fwhm_avg))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = -10, label.y = 4.225, size = 3)+
+  ylab("FWHM") + xlab("Brain Age Gap")+ theme_bw()
+# FWHM across subjects
+p1 = ggplot(QC_BAG, aes(x=BAG, y=efc))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = -10, label.y = 0.74, size = 3)+
+  ylab("EFC") + xlab("Brain Age Gap")+ theme_bw()
+p_between = ggarrange(p1,p2,p3, ncol = 1, labels = c("a","b","c"), common.legend = T, legend = "bottom")
+
+# WITHIN SUBJECTS
+
+# FBER per subject
+p5 = ggplot(QC_BAG, aes(x=BAG, y=fber, group = ID))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = c(-2, -7, -12), label.y = 7500, size = 3)+
+  ylab("FBER") + xlab("Brain Age Gap")+ theme_bw()
+p4 = ggplot(QC_BAG, aes(x=BAG, y=efc, group = ID))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = c(-2, -7, -12), label.y = 0.6, size = 3)+
+  ylab("EFC") + xlab("Brain Age Gap")+ theme_bw()
+p_within = ggarrange(p4,p5, ncol = 1, labels = c("d","e"), common.legend = T, legend = "bottom")
+
+bivariate_BAG = ggarrange(p_between,p_within, ncol = 2)
+
+ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/Supplement2.pdf", bivariate_BAG, width = 12, height = 8)
 
 
 #################### CORRELATION STRUCTURE OF ALL DATA ####
@@ -569,3 +613,5 @@ grouped_ggcorrmat(
   grouping.var = ID,
   matrix.type  = "lower"
 )
+
+
