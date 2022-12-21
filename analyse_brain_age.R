@@ -1,5 +1,6 @@
 # BBSC brain age data analysis
-# Max Korbmacher (max.korbmacher@gmail.com)
+# by Max Korbmacher (max.korbmacher@gmail.com)
+# code originally run on R version 4.1.2 (2021-11-01)
 #####################################
 #### PREPARE DATA AND PACKAGES ######
 #####################################
@@ -25,6 +26,7 @@ library(metan)
 #install.packages("stargazer")
 library(stargazer)
 library(stringr)
+library(ggpubr)
 
 ###################################
 ####### CHECK MODEL FIT ###########
@@ -46,7 +48,7 @@ COR2 = data.frame(matrix(nrow = 3, ncol = 4))
 for (i in 1:3){
   COR2[i,] = data %>% filter(ID == i) %>% corr_ci(age, pred_age)%>% select(!c(V1,V2,CI))
 }
-COR2$ID = c("Subject 1", "Subject 2", "Subject 3")
+COR2$ID = c("sub-1", "sub-2", "sub-3")
 colnames(COR2) = colnames(COR)
 CORs = rbind(COR, COR2)
 
@@ -68,7 +70,7 @@ err1 = data %>% filter(ID == "sub-1") %>% summarize(MAE = mae(age, pred_age),RMS
 err2 = data %>% filter(ID == "sub-2") %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
 ## Sub 3
 err3 = data %>% filter(ID == "sub-3") %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
-Subject = c("All","1", "2", "3") # define IDs for output table
+Subject = c("All","sub-1", "sub-2", "sub-3") # define IDs for output table
 err_tab = rbind(err_all, err1, err2, err3) # bind tables
 err_tab = data.frame(Subject, err_tab) # bind tables
 
@@ -99,11 +101,14 @@ tab3 = data %>% filter(ID == "sub-3") %>% summarize(BAG_Mean = mean(BAG), BAG_SD
 BAG_tab = rbind(tab0, tab1, tab2, tab3)
 BAG_tab = data.frame(Subject, BAG_tab)
 
-sumstats = merge(Age_tab,Pred_Age_tab)
-sumstats = merge(sumstats,BAG_tab)
-sumstats = merge(sumstats, CORR)
-summary_table = merge(sumstats, err_tab)
-write.csv(summary_table, "/home/max/Documents/Projects/BBSC/Brain_Age_paper/Table1.csv")
+sumstats = merge(Age_tab,Pred_Age_tab, by = "Subject")
+sumstats = merge(sumstats,BAG_tab, by = "Subject")
+CORs = CORs %>% dplyr::rename("Subject" = "ID")
+sumstats = merge(sumstats, CORs, by = "Subject")
+summary_table = merge(sumstats, err_tab, by = "Subject")
+
+# this writes a summary table giving an overview of age and brain age predictions across subjects
+write.csv(summary_table, "/home/max/Documents/Projects/BBSC/Brain_Age_paper/Table2.csv")
 
 #####################################
 ########### AGE-BRAIN AGE RELATIONSHIPS ###########
@@ -145,21 +150,26 @@ ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/subject_scatter.pdf", 
 QC$id = QC$bids_name
 data = data %>% transform(id=str_replace(id, "anat_",""))
 QC_BAG = merge(data, QC, by = "id")
-QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, snrd_total, age)
+QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, age)
 QC_model_0 = lm(pred_age~., data = QC_reg)
-
+summary(QC_model_0)
 ################### BACKWARDS LINEAR HIERARCHICAL MODELLING
 # start removing meaningful predictors (backwards hierarchy)
-QC_model_1 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg + wm2max, data = QC_reg) # remove efc
-QC_model_2 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
-QC_model_3 = lm(pred_age~age + cjv+ cnr+ fber+ snrd_total+ fwhm_avg, data = QC_reg) # remove snr
-QC_model_4 = lm(pred_age~age + cjv+ cnr+ snrd_total+ fwhm_avg, data = QC_reg) # remove fber
-QC_model_5 = lm(pred_age~age + cjv+ cnr+ snrd_total, data = QC_reg) # remove fwhm
+QC_model_1 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ fwhm_avg + wm2max, data = QC_reg) # remove efc
+summary(QC_model_1)
+QC_model_2 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
+summary(QC_model_2)
+QC_model_3 = lm(pred_age~age + cjv+ cnr+ fber+ fwhm_avg, data = QC_reg) # remove snr
+summary(QC_model_3)
+QC_model_4 = lm(pred_age~age + cjv+ cnr+ fwhm_avg, data = QC_reg) # remove fber
+summary(QC_model_4)
+QC_model_5 = lm(pred_age~age + cjv+ cnr, data = QC_reg) # remove fwhm
+summary(QC_model_5)
 QC_model_6 = lm(pred_age~age, data = QC_reg)
-
+summary(QC_model_6)
 # make table
 stargazer(QC_model_0,QC_model_1,QC_model_2,QC_model_3,QC_model_4,QC_model_5,QC_model_6, type = "html",  #also possible to get "html" or "latex" output
-          title = "Braina age predicted from QC metrics", out = "/home/max/Documents/Projects/BBSC/Brain_Age_paper/Table2.doc")
+          title = "Braina age predicted from QC metrics", out = "/home/max/Documents/Projects/BBSC/Brain_Age_paper/Table1.doc")
 # compare models step-wise (removing each of these variables leads to significantly lower model performance, i.e. less predicted age var expl)
 anova(QC_model_0,QC_model_1,QC_model_2,QC_model_3,QC_model_4, QC_model_5, QC_model_6)
 # compare each model against the null-model
@@ -171,7 +181,7 @@ anova(QC_model_4, QC_model_6)
 anova(QC_model_5, QC_model_6) # (we did this above already)
 #
 # These results suggests that most of the variability can be attributed to the model's age bias and unknown noise (adjusted R2 = .666).
-# However, additional R2 = 0.787 - 0.666 = 0.121 are due to data quality.
+# However, additional R2 = 0.789 - 0.666 = 0.121 are due to data quality.
 # This can also be tested from null models:
 QC_model_00 = lm(pred_age~age, data = QC_reg)
 QC_model_01 = lm(pred_age~age +efc + wm2max+snr_total+fber+fwhm_avg, data = QC_reg)
@@ -186,7 +196,7 @@ summary(diff_mod)
 
 
 #################### FOLLOW UP: SINGLE PREDICTOR IMPACT
-QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, snrd_total, age)
+QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, age)
 # follow up: can single metrics explain pred_age?
 
 wm2max_model = lm(pred_age~age+wm2max, data = QC_reg)
@@ -204,11 +214,11 @@ QC_model_0 = lm(pred_age~., data = QC_reg)
 # shows no particularly good model fit
 summary(QC_model_0)
 # check other models
-#QC_model_1 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg+wm2max, data = QC_reg) # remove efc
-#QC_model_2 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
-#QC_model_3 = lm(pred_age~age+cjv+ cnr+ fber+ fwhm_avg+ snrd_total, data = QC_reg) # remove snr
-#QC_model_4 = lm(pred_age~age+cjv+ cnr+ fwhm_avg+ snrd_total, data = QC_reg) # remove fber
-#QC_model_5 = lm(pred_age~age+cjv+ cnr+ snrd_total, data = QC_reg)# remove fwhm
+#QC_model_1 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ fwhm_avg+wm2max, data = QC_reg) # remove efc
+#QC_model_2 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
+#QC_model_3 = lm(pred_age~age+cjv+ cnr+ fber+ fwhm_avg, data = QC_reg) # remove snr
+#QC_model_4 = lm(pred_age~age+cjv+ cnr+ fwhm_avg, data = QC_reg) # remove fber
+#QC_model_5 = lm(pred_age~age+cjv+ cnr, data = QC_reg)# remove fwhm
 
 #stargazer(QC_model_0,QC_model_1,QC_model_2,QC_model_3,QC_model_4,QC_model_5, type = "text",  #also possible to get "html" or "latex" output
 #          title = "QC metrics and pred_age")
@@ -222,18 +232,18 @@ summary(QC_model_0)
 #summary(QC_model_01)
 
 #################### SUBJECT 2 ####
-QC_reg = QC_BAG %>% filter(ID == "Subject 2") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, snrd_total, age)
+QC_reg = QC_BAG %>% filter(ID == "Subject 2") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, age)
 QC_model_0 = lm(pred_age~., data = QC_reg)
 summary(QC_model_0)
 
 ################### BACKWARDS LINEAR HIERARCHICAL MODELLING
 # start removing meaningful predictors (backwards hierarchy)
-QC_model_1 = lm(pred_age~age+cjv+ cnr+ efc+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
+QC_model_1 = lm(pred_age~age+cjv+ cnr+ efc+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
 # from here, no more significant predictors, but one can keep removing.
 summary(QC_model_1)
-QC_model_2 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove efc
+QC_model_2 = lm(pred_age~age+cjv+ cnr+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove efc
 summary(QC_model_2)
-QC_model_3 = lm(pred_age~age+cjv+ cnr+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove fber
+QC_model_3 = lm(pred_age~age+cjv+ cnr+ snr_total+ fwhm_avg, data = QC_reg) # remove fber
 summary(QC_model_3)
 QC_model_4 = lm(pred_age~age+cjv+ cnr+ snr_total+ fwhm_avg, data = QC_reg) # remove snrd
 summary(QC_model_4)
@@ -263,7 +273,7 @@ snr_model = lm(pred_age~snr_total + age, data = QC_reg)
 
 
 #################### SUBJECT 3 ####
-QC_reg = QC_BAG %>% filter(ID == "Subject 3") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, snrd_total, age)
+QC_reg = QC_BAG %>% filter(ID == "Subject 3") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, age)
 QC_model_0 = lm(pred_age~., data = QC_reg)
 # predicting brain age from age + QC metrics does not seem to work well for both sub1 & sub3 
 summary(QC_model_0)
@@ -275,16 +285,16 @@ summary(QC_model_0)
 QC$id = QC$bids_name
 data = data %>% transform(id=str_replace(id, "anat_",""))
 QC_BAG = merge(data, QC, by = "id")
-QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, snrd_total, age)
+QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, age)
 QC_model_0 = lm(pred_age~., data = QC_reg)
 
 ################### BACKWARDS LINEAR HIERARCHICAL MODELLING
 # start removing meaningful predictors (backwards hierarchy)
-QC_model_1 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg + wm2max, data = QC_reg) # remove efc
-QC_model_2 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
-QC_model_3 = lm(pred_age~age + cjv+ cnr+ fber+ snrd_total+ fwhm_avg, data = QC_reg) # remove snr
-QC_model_4 = lm(pred_age~age + cjv+ cnr+ snrd_total+ fwhm_avg, data = QC_reg) # remove fber
-QC_model_5 = lm(pred_age~age + cjv+ cnr+ snrd_total, data = QC_reg) # remove fwhm
+QC_model_1 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ fwhm_avg + wm2max, data = QC_reg) # remove efc
+QC_model_2 = lm(pred_age~age + cjv+ cnr+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
+QC_model_3 = lm(pred_age~age + cjv+ cnr+ fber+ fwhm_avg, data = QC_reg) # remove snr
+QC_model_4 = lm(pred_age~age + cjv+ cnr+ fwhm_avg, data = QC_reg) # remove fber
+QC_model_5 = lm(pred_age~age + cjv+ cnr, data = QC_reg) # remove fwhm
 QC_model_6 = lm(pred_age~age, data = QC_reg)
 
 # make table
@@ -316,7 +326,7 @@ summary(diff_mod)
 
 
 #################### FOLLOW UP: SINGLE PREDICTOR IMPACT
-QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, snrd_total, age)
+QC_reg = QC_BAG %>% select(pred_age,efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, age)
 # follow up: can single metrics explain pred_age?
 
 wm2max_model = lm(pred_age~age+wm2max, data = QC_reg)
@@ -334,11 +344,11 @@ QC_model_0 = lm(pred_age~., data = QC_reg)
 # shows no particularly good model fit
 summary(QC_model_0)
 # check other models
-QC_model_1 = lm(pred_age~cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg+wm2max, data = QC_reg) # remove efc
-QC_model_2 = lm(pred_age~cjv+ cnr+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
-QC_model_3 = lm(pred_age~cjv+ cnr+ fber+ fwhm_avg+ snrd_total, data = QC_reg) # remove snr
-QC_model_4 = lm(pred_age~cjv+ cnr+ fwhm_avg+ snrd_total, data = QC_reg) # remove fber
-QC_model_5 = lm(pred_age~cjv+ cnr+ snrd_total, data = QC_reg)# remove fwhm
+QC_model_1 = lm(pred_age~cjv+ cnr+ fber+ snr_total+ fwhm_avg+wm2max, data = QC_reg) # remove efc
+QC_model_2 = lm(pred_age~cjv+ cnr+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
+QC_model_3 = lm(pred_age~cjv+ cnr+ fber+ fwhm_avg, data = QC_reg) # remove snr
+QC_model_4 = lm(pred_age~cjv+ cnr+ fwhm_avg, data = QC_reg) # remove fber
+QC_model_5 = lm(pred_age~cjv+ cnr, data = QC_reg)# remove fwhm
 
 stargazer(QC_model_0,QC_model_1,QC_model_2,QC_model_3,QC_model_4,QC_model_5, type = "text",  #also possible to get "html" or "latex" output
           title = "QC metrics and pred_age")
@@ -368,17 +378,17 @@ stargazer(wm2max_model, fwhm_avg_model, snr_model, cjv_model, type = "text",  #a
 
 
 #################### SUBJECT 2 ####
-QC_reg = QC_BAG %>% filter(ID == "Subject 2") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, snrd_total)
+QC_reg = QC_BAG %>% filter(ID == "Subject 2") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber)
 QC_model_0 = lm(pred_age~., data = QC_reg)
 summary(QC_model_0)
 
 ################### BACKWARDS LINEAR HIERARCHICAL MODELLING
 # start removing meaningful predictors (backwards hierarchy)
-QC_model_1 = lm(pred_age~cjv+ cnr+ efc+ fber+ snr_total+ snrd_total+ fwhm_avg, data = QC_reg) # remove wm2max
-QC_model_2 = lm(pred_age~cjv+ cnr+ efc+ fber+ snr_total+ snrd_total, data = QC_reg) # remove fwhm_avg
-QC_model_3 = lm(pred_age~cjv+ cnr+ efc+ fber+ snrd_total, data = QC_reg) # remove snr
-QC_model_4 = lm(pred_age~ cnr+ efc+ fber+ snrd_total, data = QC_reg) # remove cjv
-QC_model_5 = lm(pred_age~ cnr+ fber+ snrd_total, data = QC_reg) # remove efc
+QC_model_1 = lm(pred_age~cjv+ cnr+ efc+ fber+ snr_total+ fwhm_avg, data = QC_reg) # remove wm2max
+QC_model_2 = lm(pred_age~cjv+ cnr+ efc+ fber+ snr_total, data = QC_reg) # remove fwhm_avg
+QC_model_3 = lm(pred_age~cjv+ cnr+ efc+ fber, data = QC_reg) # remove snr
+QC_model_4 = lm(pred_age~ cnr+ efc+ fber, data = QC_reg) # remove cjv
+QC_model_5 = lm(pred_age~ cnr+ fber, data = QC_reg) # remove efc
 
 # make table
 stargazer(QC_model_0,QC_model_1,QC_model_2,QC_model_3,QC_model_4, QC_model_5, type = "text",  #also possible to get "html" or "latex" output
@@ -407,7 +417,7 @@ stargazer(wm2max_model, fwhm_avg_model, snr_model, cjv_model, type = "text",  #a
 
 
 #################### SUBJECT 3 ####
-QC_reg = QC_BAG %>% filter(ID == "Subject 3") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, snrd_total)
+QC_reg = QC_BAG %>% filter(ID == "Subject 3") %>% select(pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber)
 QC_model_0 = lm(pred_age~., data = QC_reg)
 summary(QC_model_0)
 
@@ -450,7 +460,7 @@ stargazer(cnr_model, efc_model, wm2max_model, type = "text",  #also possible to 
 ##### BIVARIATE RELATIONSHIPS ###########
 #########################################
 
-#################### extract beta values
+#################### extract beta values ####
 # prep data frames
 SUB1 = QC_BAG %>% filter(ID == "Subject 1")
 SUB2 = QC_BAG %>% filter(ID == "Subject 2")
@@ -468,7 +478,7 @@ for (i in 1:4){
   m5 = lm(pred_age~age + snr_total, data = data_list[[i]])
   m6 = lm(pred_age~age + fwhm_avg, data = data_list[[i]])
   m7 = lm(pred_age~age + efc, data = data_list[[i]])
-  m8 = lm(pred_age~age + snrd_total, data = data_list[[i]])
+  m8 = lm(pred_age~age , data = data_list[[i]])
   model_list = list(m1,m2,m3,m4,m5,m6,m7,m8)
   for (m in 1:length(predictors)){
     out[m,i] = lm.beta(model_list[[m]])$coefficients[3]
@@ -496,10 +506,55 @@ pvals %>% filter(sub3 < 0.05)
 # for sub 3: none
 
 # print standardised betas
-out
+out %>% select(all,sub2,predictors)
 
-#################### CORRELATION STRUCTURE OF THE DATA
-QC_reg = QC_BAG %>% select(ID,pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber, snrd_total)
+
+#################### PLOT SIG PRED CORRELATIONS ####
+
+# ACROSS SUBJECTS
+
+# WM2MAX across subjects
+p3 = ggplot(QC_BAG, aes(x=pred_age, y=wm2max))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = 22.5, label.y = .5, size = 3)+
+  ylab("WM2MAX") + xlab("Predicted Age")+ theme_bw()
+# FWHM across subjects
+p2 = ggplot(QC_BAG, aes(x=pred_age, y=fwhm_avg))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = 22.5, label.y = 4.225, size = 3)+
+  ylab("FWHM") + xlab("Predicted Age")+ theme_bw()
+# FWHM across subjects
+p1 = ggplot(QC_BAG, aes(x=pred_age, y=efc))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = 22.5, label.y = 0.74, size = 3)+
+  ylab("EFC") + xlab("Predicted Age")+ theme_bw()
+p_between = ggarrange(p1,p2,p3, ncol = 1, labels = c("a","b","c"), common.legend = T, legend = "bottom")
+
+# WITHIN SUBJECTS
+
+# FBER per subject
+p5 = ggplot(QC_BAG, aes(x=pred_age, y=fber, group = ID))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = c(22.5,26.5,30.5), label.y = 7500, size = 3)+
+  ylab("FBER") + xlab("Predicted Age")+ theme_bw()
+p4 = ggplot(QC_BAG, aes(x=pred_age, y=efc, group = ID))+
+  geom_smooth(method = lm) +
+  geom_point(aes(color = ID, shape = ID))+
+  stat_cor(method = "spearman", label.x = c(22.5,26.5,30.5), label.y = c(0.75,0.7375,0.725), size = 3)+
+  ylab("EFC") + xlab("Predicted Age")+ theme_bw()
+p_within = ggarrange(p4,p5, ncol = 1, labels = c("d","e"), common.legend = T, legend = "bottom")
+
+bivariate = ggarrange(p_between,p_within, ncol = 2)
+ggsave("/home/max/Documents/Projects/BBSC/Brain_Age_paper/Figure2.pdf", bivariate, width = 12, height = 8)
+
+
+
+#################### CORRELATION STRUCTURE OF ALL DATA ####
+QC_reg = QC_BAG %>% select(ID,pred_age,wm2max, fwhm_avg, snr_total, cjv, cnr, efc, fber)
 ggcorrmat(
   data         = QC_reg,  #dplyr::filter(data, ID %in% c("Subject 1")),
   type         = "robust",
@@ -514,127 +569,3 @@ grouped_ggcorrmat(
   grouping.var = ID,
   matrix.type  = "lower"
 )
-
-
-
-
-
-
-
-
-#########################################################
-### EXPLAINING BAG FROM ADDIONAL MEANINGFUL MEASURES #####
-########################################################
-# relode data for correct id column
-data = read.csv("/home/max/Documents/Projects/Brain_Age/DL/BBSC/df.csv")
-
-# behavioural data
-morning_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/morning_final.csv")
-before_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/before_final.csv")
-after_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/after_final.csv")
-
-# rename id column in behavioural data frames
-after_final = after_final %>% rename("id" = "scan")
-before_final = before_final %>% rename("id" = "scan")
-morning_final = morning_final %>% rename("id" = "scan")
-
-# remove suffix
-after_final = after_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
-before_final = before_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
-morning_final = morning_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
-
-# merge data frames
-abeh_BAG = merge(data, after_final, by = "id")
-bbeh_BAG = merge(abeh_BAG, before_final, by = "id")
-morning_BAG = merge(bbeh_BAG, morning_final, by = "id")
-
-# modelling
-## null model (age and ID) (we use three different models, later specified based on missingness in each model)
-mod0.1 <- lm(formula = pred_age ~ age + ID, data = morning_BAG)
-
-## sleep behaviour (from morning questionnaire)
-mod1 <- lm(formula = pred_age ~ age + ID + Soreness + sleep_qual + sleep_hours, data = morning_BAG)
-stargazer(mod0.1, mod1, type = "text",  #also possible to get "html" or "latex" output
-          title = "")
-anova(mod0.1, mod1) # not different from null model
-#ggcoefstats(mod1)
-
-## whether (from before scanning questionnaire)
-whether = bbeh_BAG %>% select(pred_age, age, ID.x, outside_humid, outside_temp, control_room_temp, control_room_humid, scanner_room_temp, scanner_room_humid)
-mod2 <- lm(formula = pred_age ~ age + ID.x + outside_humid + outside_temp + control_room_temp + control_room_humid + scanner_room_temp + scanner_room_humid, data = whether)
-mod0.2 <- lm(formula = pred_age ~ age + ID.x, data = na.omit(whether))
-stargazer(mod0.2, mod2, type = "text",  #also possible to get "html" or "latex" output
-          title = "")
-anova(mod0.2, mod2) # not different from null model
-#ggcoefstats(mod2)
-
-## body measures (from before scanning questionnaire)
-body_measures = bbeh_BAG %>% select(pred_age, age, ID.x, body_temp, pulse_pressure, eaten_today, coffe_today)
-mod3 <- lm(formula = pred_age ~ ., data = body_measures)
-mod0.3 <- lm(formula = pred_age ~ age + ID.x, data = na.omit(body_measures))
-stargazer(mod0.3, mod3, type = "text",  #also possible to get "html" or "latex" output
-          title = "")
-anova(mod0.3, mod3) # not different from null model
-
-#
-#
-#
-# CONCLUSION: whether (temperature and humidity), sleep, body temperature, blood pressure and food or caffeine consumption have no effect on BAG
-#
-#
-
-
-#####################################
-############# DIFFERENCES ###########
-#####################################
-
-# pre covid, long covid
-#
-# escitalopram ON vs OFF
-# 13.05.2021
-data$ID = c(replicate(38,"Subject 1"), replicate(40, "Subject 2"), replicate(25, "Subject 3"))
-data %>% filter(ID=="Subject 1")
-
-
-
-######## OLD ############
-
-
-############# SIMPLE SCATTER PLOTS
-
-## ALL subjects
-data %>% 
-  ggplot(aes(x=Age, 
-             y=pred_age, 
-             color=ID))+ geom_point()+
-  geom_smooth(method="lm",se = T) + theme_bw() +
-  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for each Subject over time")
-
-## Fitting one line for all subject
-data %>% 
-  ggplot(aes(x=Age, 
-             y=pred_age))+ geom_point(group = ID)+
-  geom_smooth(method="lm",se = T) + theme_bw() +
-  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for all Subjects over time")
-
-
-## Subject 1
-data %>% filter(ID == "Subject 1") %>%
-  ggplot(aes(x=Age, 
-             y=pred_age))+ geom_point()+
-  geom_smooth(method="lm",se = T) + theme_bw() +
-  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 1")
-
-## Subject 2
-data %>% filter(ID == "Subject 2") %>%
-  ggplot(aes(x=Age, 
-             y=pred_age))+ geom_point()+
-  geom_smooth(method="lm",se = T) + theme_bw() +
-  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 2")
-
-## Subject 3
-data %>% filter(ID == "Subject 3") %>%
-  ggplot(aes(x=Age, 
-             y=pred_age))+ geom_point()+
-  geom_smooth(method="lm",se = T) + theme_bw() +
-  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 1")
