@@ -468,6 +468,7 @@ SUB2 = QC_BAG %>% filter(ID == "Subject 2")
 SUB3 = QC_BAG %>% filter(ID == "Subject 3")
 data_list = list(QC_BAG,SUB1,SUB2,SUB3)
 predictors = c("cjv", "cnr", "wm2max","fber","snr_total", "fwhm_avg", "efc", "snrd_total")
+
 out = data.frame(matrix(nrow = length(predictors),ncol = length(data_list)))
 pvals = data.frame(matrix(nrow = length(predictors),ncol = length(data_list)))
 # loop over them extracting beta values
@@ -479,7 +480,7 @@ for (i in 1:4){
   m5 = lm(pred_age~age + snr_total, data = data_list[[i]])
   m6 = lm(pred_age~age + fwhm_avg, data = data_list[[i]])
   m7 = lm(pred_age~age + efc, data = data_list[[i]])
-  m8 = lm(pred_age~age , data = data_list[[i]])
+  m8 = lm(pred_age~age + snrd_total , data = data_list[[i]])
   model_list = list(m1,m2,m3,m4,m5,m6,m7,m8)
   for (m in 1:length(predictors)){
     out[m,i] = lm.beta(model_list[[m]])$coefficients[3]
@@ -615,3 +616,149 @@ grouped_ggcorrmat(
 )
 
 
+
+
+
+
+###############
+##########
+###############
+#########
+###############
+###################
+#### OLD #########
+###############
+##########
+###############
+#########
+###############
+###################
+###############
+##########
+###############
+#########
+###############
+###################
+###############
+##########
+###############
+#########
+###############
+###################
+
+#########################################################
+### EXPLAINING BAG FROM ADDIONAL MEANINGFUL MEASURES #####
+########################################################
+# relode data for correct id column
+data = read.csv("/home/max/Documents/Projects/Brain_Age/DL/BBSC/df.csv")
+
+# behavioural data
+morning_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/morning_final.csv")
+before_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/before_final.csv")
+after_final = read.csv("/home/max/Documents/Projects/BBSC/Brain_Age_paper/after_final.csv")
+
+# rename id column in behavioural data frames
+after_final = after_final %>% rename("id" = "scan")
+before_final = before_final %>% rename("id" = "scan")
+morning_final = morning_final %>% rename("id" = "scan")
+
+# remove suffix
+after_final = after_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
+before_final = before_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
+morning_final = morning_final %>% transform(id=str_replace(id, ".nii.gz","")) %>% select(-age)
+
+# merge data frames
+abeh_BAG = merge(data, after_final, by = "id")
+bbeh_BAG = merge(abeh_BAG, before_final, by = "id")
+morning_BAG = merge(bbeh_BAG, morning_final, by = "id")
+
+# modelling
+## null model (age and ID) (we use three different models, later specified based on missingness in each model)
+mod0.1 <- lm(formula = pred_age ~ age + ID, data = morning_BAG)
+
+## sleep behaviour (from morning questionnaire)
+mod1 <- lm(formula = pred_age ~ age + ID + Soreness + sleep_qual + sleep_hours, data = morning_BAG)
+stargazer(mod0.1, mod1, type = "text",  #also possible to get "html" or "latex" output
+          title = "")
+anova(mod0.1, mod1) # not different from null model
+#ggcoefstats(mod1)
+
+## whether (from before scanning questionnaire)
+whether = bbeh_BAG %>% select(pred_age, age, ID.x, outside_humid, outside_temp, control_room_temp, control_room_humid, scanner_room_temp, scanner_room_humid)
+mod2 <- lm(formula = pred_age ~ age + ID.x + outside_humid + outside_temp + control_room_temp + control_room_humid + scanner_room_temp + scanner_room_humid, data = whether)
+mod0.2 <- lm(formula = pred_age ~ age + ID.x, data = na.omit(whether))
+stargazer(mod0.2, mod2, type = "text",  #also possible to get "html" or "latex" output
+          title = "")
+anova(mod0.2, mod2) # not different from null model
+#ggcoefstats(mod2)
+
+## body measures (from before scanning questionnaire)
+body_measures = bbeh_BAG %>% select(pred_age, age, ID.x, body_temp, pulse_pressure, eaten_today, coffe_today)
+mod3 <- lm(formula = pred_age ~ ., data = body_measures)
+mod0.3 <- lm(formula = pred_age ~ age + ID.x, data = na.omit(body_measures))
+stargazer(mod0.3, mod3, type = "text",  #also possible to get "html" or "latex" output
+          title = "")
+anova(mod0.3, mod3) # not different from null model
+
+#
+#
+#
+# CONCLUSION: whether (temperature and humidity), sleep, body temperature, blood pressure and food or caffeine consumption have no effect on BAG
+#
+#
+
+
+#####################################
+############# DIFFERENCES ###########
+#####################################
+
+# pre covid, long covid
+#
+# escitalopram ON vs OFF
+# 13.05.2021
+data$ID = c(replicate(38,"Subject 1"), replicate(40, "Subject 2"), replicate(25, "Subject 3"))
+data %>% filter(ID=="Subject 1")
+
+
+
+######## OLD ############
+
+
+############# SIMPLE SCATTER PLOTS
+
+## ALL subjects
+data %>% 
+  ggplot(aes(x=Age, 
+             y=pred_age, 
+             color=ID))+ geom_point()+
+  geom_smooth(method="lm",se = T) + theme_bw() +
+  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for each Subject over time")
+
+## Fitting one line for all subject
+data %>% 
+  ggplot(aes(x=Age, 
+             y=pred_age))+ geom_point(group = ID)+
+  geom_smooth(method="lm",se = T) + theme_bw() +
+  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for all Subjects over time")
+
+
+## Subject 1
+data %>% filter(ID == "Subject 1") %>%
+  ggplot(aes(x=Age, 
+             y=pred_age))+ geom_point()+
+  geom_smooth(method="lm",se = T) + theme_bw() +
+  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 1")
+
+## Subject 2
+data %>% filter(ID == "Subject 2") %>%
+  ggplot(aes(x=Age, 
+             y=pred_age))+ geom_point()+
+  geom_smooth(method="lm",se = T) + theme_bw() +
+  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 2")
+
+## Subject 3
+data %>% filter(ID == "Subject 3") %>%
+  ggplot(aes(x=Age, 
+             y=pred_age))+ geom_point()+
+  geom_smooth(method="lm",se = T) + theme_bw() +
+  ylab("Predicted Age") + xlab("Age") + scale_colour_discrete("Models") + ggtitle("Predicted Age for Subject 1")
