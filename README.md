@@ -1,4 +1,4 @@
-# BBSC_BrainAge
+# Densly Sampled BrainAge
 
 Here, I analysed the brain age for particpants of 2 data sets:
 
