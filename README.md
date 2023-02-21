@@ -12,21 +12,18 @@ Opfer, R., Krüger, J., Spies, L., Ostwaldt, A. C., Kitzler, H. H., Schippling, 
 
 Data available here: https://www.kaggle.com/datasets/ukeppendorf/frequently-traveling-human-phantom-fthp-dataset
 
-## Data set 1 analyses (Bergen Breakfast Scanning Club)
-
-Analysis file:
-analyse_brain_age.R
+## Data set 1 (Bergen Breakfast Scanning Club)
 
 Data files:
 df.csv >> brain age predictions for data set 1
 group_T1w.tsv >> MRICQ outputs for data set 1
 
-## Data set 2 analyses (Travelling Human Phantom)
-
-Analyses file:
-data_set2_analysis.R
+## Data set 2 (Travelling Human Phantom)
 
 Data files:
 out.csv >> the MRIQC outputs for data set 2
 inclusion_list.csv >> list to exclude repeat scans
 predictions.csv >> brain age predictions and acquisition parameters
+
+## Analyses for both data sets can be found here:
+new_analyses.R
