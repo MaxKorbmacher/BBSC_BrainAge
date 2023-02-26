@@ -64,25 +64,43 @@ dat = rbind(QC_reg,QC_reg2)
 #dat$fieldStrength = factor(dat$fieldStrength)
 dat$ID = factor(dat$ID)
 
-# RMSE & MAE ####
+
+# Table 1 ####
+# within subject age, brain age and BAG + RMSE & MAE
 ## Sub 1
 err1 = dat %>% filter(ID == "1") %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
 ## Sub 2
 err2 = dat %>% filter(ID == "2") %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
 ## Sub 3
 err3 = dat %>% filter(ID == "3") %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
-## Sub 4
+## Sub 4: 1.5T & 3T
 err4 = dat %>% filter(ID == "4", fieldStrength == 3) %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
-Subject = c("sub-1", "sub-2", "sub-3","sub-4") # define IDs for output table
-err_tab = rbind(err1, err2, err3,err4) # bind tables
-err_tab = data.frame(Subject, err_tab) # bind tables
-err_tab
+err5 = dat %>% filter(ID == "4", fieldStrength == 1.5) %>% summarize(MAE = mae(age, pred_age),RMSE = rmse(age, pred_age))
+err_tab = rbind(err1, err2, err3,err4, err5) # bind tables
+err_tab = data.frame(err_tab) # bind tables
+
+
+# mean and sd of age and brain age at 3T
+Tab1 = data.frame(matrix(ncol = 7, nrow = 5))
+dat1 = dat %>% filter(fieldStrength == 3)
+for (i in 1:4){
+  Tab1[i,] = (dat1 %>% filter(ID == i) %>% summarize(N = nrow(dat1 %>% filter(ID == i)),MeanAge = mean(age), SDAge = sd(age),  MeanPrd = mean(pred_age), SDPrd = sd(pred_age), BAGMean = mean(pred_age-age), BAGSD = sd(pred_age-age)))
+}
+# mean and sd of age and brain age at 1.5T
+dat2 = dat %>% filter(fieldStrength == 1.5)
+Tab1[5,] = (dat2 %>% filter(ID == 4) %>% summarize(N = nrow(dat2 %>% filter(ID == 4)),MeanAge = mean(age), SDAge = sd(age),  MeanPrd = mean(pred_age), SDPrd = sd(pred_age), BAGMean = mean(pred_age-age), BAGSD = sd(pred_age-age)))
+colnames(Tab1) = c("N Observations","Mean Age",     "SD Age",  "Mean Prediction",    "SD Prediction", "Mean BAG",    "SD BAG")
+Subject = c("BBSC1", "BBSC2", "BBSC3", "FTHP1", "FTHP1")
+FieldStrength = c(3,3,3,3,1.5)
+Tab1 = data.frame(Subject, FieldStrength, Tab1, err_tab)
+Tab1[4:ncol(Tab1)] = round(Tab1[4:ncol(Tab1)], digits = 2)
+write.csv(file = "/home/max/Documents/Projects/Brain_Age/DL/BBSC/BBSC_BrainAge/Table1.csv", Tab1)
 
 # CORRELATIONS ####
-dat$Subject = c(replicate(38, "Subject 1 (Bergen Breakfast Scanning Club Data)"),replicate(40, "Subject 2 (Bergen Breakfast Scanning Club Data)"),replicate(25, "Subject 3 (Bergen Breakfast Scanning Club Data)"),replicate(551, "Subject 4 (Travelling Human Phantom Data)"))
+dat$Subject = c(replicate(38, "BBSC1 (Bergen Breakfast Scanning Club Data)"),replicate(40, "BBSC2 (Bergen Breakfast Scanning Club Data)"),replicate(25, "BBSC3 (Bergen Breakfast Scanning Club Data)"),replicate(551, "FTHP1 (Frequently Travelling Human Phantom Data)"))
 # grouped scatter plots
 subject_scatter = grouped_ggscatterstats(
-  data             = dat,
+  data             = dat1,
   x                = age,
   y                = pred_age,
   grouping.var     = Subject,
@@ -92,7 +110,20 @@ subject_scatter = grouped_ggscatterstats(
 )
 ggsave("/home/max/Documents/Projects/Brain_Age/DL/BBSC/BBSC_BrainAge/Figure1.pdf", subject_scatter, width = 19, height = 8)
 
+FTHP = dat %>% filter(ID == 4) %>% filter(fieldStrength != 1)
+FTHP$fieldStrength = ifelse(FTHP$fieldStrength == 1.5, "Field Strength = 1.5T","Field Strength = 3T")
 
+# grouped scatter plots
+FTHP_scatter = grouped_ggscatterstats(
+  data             = FTHP,
+  x                = age,
+  y                = pred_age,
+  grouping.var     = fieldStrength,
+  ylab             = "Predicted Age",
+  xlab   = "Age",
+  ggtheme          = ggplot2::theme_bw(),
+)
+ggsave("/home/max/Documents/Projects/Brain_Age/DL/BBSC/BBSC_BrainAge/Figure2.pdf", FTHP_scatter, width = 19, height = 8)
 
 # MODELLING ASSUMPTIONS ####
 
@@ -211,10 +242,10 @@ data2$manufacturer = fct_collapse(data2$manufacturer,  Siemens = c("Siemens","SI
 #data2$fieldStrength = factor(data2$fieldStrength)
 THP_reg = data2 %>% dplyr::select(efc, wm2max,snr_total, fber, fwhm_avg, cjv, cnr, age,pred_age, fieldStrength, manufacturer,sliceThickness,siteID)
 THP_reg[1:7] = scale(THP_reg[1:7])
-THP_reg$siteID = dactor(THP_reg$siteID)
+THP_reg$siteID = factor(THP_reg$siteID)
 THP_model = list()
 for ( i in 1:length(QCmetrics)){
-  f = formula(paste("pred_age~",QCmetrics[i],"+age+(1|fieldStrength)+(1|sliceThickness)+(1|siteID)")) 
+  f = formula(paste("pred_age~",QCmetrics[i],"+age+(1|sliceThickness)+(1|siteID)")) 
   THP_model[[i]] = lmer(f,data = THP_reg)
   # coefficients for the different QC metrics
   RIb[i] = as.numeric(fixef(THP_model[[i]])[2])
