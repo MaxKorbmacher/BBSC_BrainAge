@@ -41,4 +41,4 @@ Tønnesen, S., Kaufmann, T., Doan, N. T., Alnæs, D., Córdova-Palomera, A., Mee
 b) Norwegian Cognitive NeuroGenetics (NCNG) data (Oslo)
 Espeseth, T., Christoforou, A., Lundervold, A. J., Steen, V. M., Le Hellard, S., & Reinvang, I. (2012). Imaging and cognitive genetics: the Norwegian Cognitive NeuroGenetics sample. Twin Research and Human Genetics, 15(3), 442-452. https://doi.org/10.1017/thg.2012.8
 
-## Analyses for the cross-secitonal data will be made available soon
+## Note: Analyses for the cross-secitonal data are not made available, please contact me if of interest!
